@@ -1,0 +1,26 @@
+@"
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Env & secrets
+.env
+
+# Data (large files, don't commit)
+data/raw_filings/*
+data/processed/*
+!data/raw_filings/.gitkeep
+!data/processed/.gitkeep
+
+# Vector DB
+chroma_db/
+*.sqlite3
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+"@ | Out-File -FilePath .gitignore -Encoding utf8
