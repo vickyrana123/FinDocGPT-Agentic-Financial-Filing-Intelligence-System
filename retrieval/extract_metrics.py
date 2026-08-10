@@ -53,9 +53,7 @@ def get_collection():
     global _collection
     if _collection is None:
         client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-        embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=EMBEDDING_MODEL
-        )
+        embedding_fn = embedding_functions.DefaultEmbeddingFunction()
         _collection = client.get_collection(name=COLLECTION_NAME, embedding_function=embedding_fn)
     return _collection
 

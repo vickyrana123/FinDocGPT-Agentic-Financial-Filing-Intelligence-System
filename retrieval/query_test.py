@@ -16,9 +16,7 @@ EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 
 def get_collection():
     client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-    embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name=EMBEDDING_MODEL
-    )
+    embedding_fn = embedding_functions.DefaultEmbeddingFunction()
     return client.get_collection(name=COLLECTION_NAME, embedding_function=embedding_fn)
 
 
