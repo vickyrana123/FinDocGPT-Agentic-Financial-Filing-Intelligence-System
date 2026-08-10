@@ -651,7 +651,7 @@
 
 <script>
   const params = new URLSearchParams(window.location.search);
-  const API_BASE = params.get('api') || window.FINDOCGPT_API_BASE || 'http://127.0.0.1:8000';
+  const API_BASE = params.get('api') || window.FINDOCGPT_API_BASE || window.location.origin;
   document.getElementById('apiBaseLabel').textContent = API_BASE.replace(/^https?:\/\//, '');
 
   // ---------- Theme toggle ----------
