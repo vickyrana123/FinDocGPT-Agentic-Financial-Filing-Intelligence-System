@@ -14,8 +14,8 @@ data/processed/*
 !data/processed/.gitkeep
 
 # Vector DB
-chroma_db/
-*.sqlite3
+# chroma_db/
+# *.sqlite3
 
 # Notebooks
 .ipynb_checkpoints/

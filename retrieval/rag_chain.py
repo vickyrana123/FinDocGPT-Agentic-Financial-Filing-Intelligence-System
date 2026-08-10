@@ -11,6 +11,11 @@ import sys
 sys.path.append(str(Path(__file__).parent))
 from query_test import search
 
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+from llm_client import call_llm
+
 import requests
 
 METRIC_KEYWORDS = [
@@ -63,22 +68,9 @@ def build_context(chunks: list[str], metadatas: list[dict]) -> str:
 
 
 def call_ollama(prompt: str) -> str:
-    """Sends a prompt to the local Ollama server and returns the response text.
-    keep_alive keeps the model resident in memory between calls, avoiding
-    slow reload overhead on the first request after the server starts."""
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": OLLAMA_MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "keep_alive": "30m",
-            "options": {"temperature": 0.2},  # low temperature: factual QA should be
-        },
-        timeout=400,
-    )
-    response.raise_for_status()
-    return response.json()["response"]
+    """Delegates to the centralized llm_client, which switches between
+    Ollama (local dev) and Groq (deployed) based on LLM_PROVIDER."""
+    return call_llm(prompt, temperature=0.2, max_tokens=800, timeout=400)
 
 
 def ask_with_context(question: str, n_results: int = 5, ticker: str = None, section: str = None) -> dict:

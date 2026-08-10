@@ -30,29 +30,16 @@ import sys
 sys.path.append(str(Path(__file__).parent.parent / "retrieval"))
 from rag_chain import ask_with_context
 
+sys.path.append(str(Path(__file__).parent.parent))
+from llm_client import call_llm
+
 from eval_dataset import TEST_QUESTIONS
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "llama3.2"
 
 def call_judge(prompt: str) -> str:
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": OLLAMA_MODEL,
-            "prompt": prompt,
-            "stream": False,
-            "keep_alive": "10m",
-            "options": {
-                "temperature": 0.0,
-                "num_predict": 100,
-                "num_ctx": 4096,
-            },
-        },
-        timeout=240,
-    )
-    response.raise_for_status()
-    return response.json()["response"]
+    return call_llm(prompt, temperature=0.0, max_tokens=100, timeout=240)
 
 def parse_score(judge_response: str) -> int | None:
     match = re.search(r"SCORE:\s*(\d+)", judge_response, re.IGNORECASE)

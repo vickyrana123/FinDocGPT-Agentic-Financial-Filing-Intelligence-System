@@ -14,35 +14,15 @@ import requests
 import chromadb
 from chromadb.utils import embedding_functions
 
+sys.path.append(str(Path(__file__).parent.parent))
+from llm_client import call_llm
+
 import sys
 sys.path.append(str(Path(__file__).parent))
 
 
 def call_ollama_for_extraction(prompt: str, timeout: int = 400) -> str:
-    """
-    Uses the 3B model (llama3.2) - testing showed the smaller 1B model is
-    too weak for numeric extraction from dense financial text; it returns
-    valid JSON but with everything null instead of actually finding the
-    values. The 3B model extracts real numbers correctly but is slower,
-    so we compensate by shrinking context size (fewer chunks, tighter
-    truncation) rather than downgrading the model.
-    """
-    response = requests.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": "llama3.2",
-            "prompt": prompt,
-            "stream": False,
-            "keep_alive": "10m",
-            "options": {
-                "num_predict": 200,
-                "temperature": 0.1,
-            },
-        },
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    return response.json()["response"]
+    return call_llm(prompt, temperature=0.1, max_tokens=200, timeout=timeout)
 
 
 def call_with_retry(prompt: str, retries: int = 1) -> str:

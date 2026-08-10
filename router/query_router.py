@@ -17,6 +17,11 @@ import requests
 OLLAMA_URL = "http://localhost:11434/api/generate"
 OLLAMA_MODEL = "llama3.2"
 
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+from llm_client import call_llm
+
 LIVE_KEYWORDS = [
     "current price", "current stock", "stock price", "today", "right now",
     "as of now", "live", "trading at", "how much is", "what's the price"
@@ -74,23 +79,12 @@ Question: "{query}"
 Respond with ONLY one word: live, filings, or both."""
 
     try:
-        response = requests.post(
-            OLLAMA_URL,
-            json={
-                "model": OLLAMA_MODEL,
-                "prompt": prompt,
-                "stream": False,
-            },
-            timeout=30,
-        )
-        response.raise_for_status()
-        answer = response.json()["response"].strip().lower()
+        answer = call_llm(prompt, temperature=0.0, max_tokens=10, timeout=30).strip().lower()
         for candidate in ("live", "filings", "both"):
             if candidate in answer:
                 return candidate
         return "filings"
     except Exception:
-        # If Ollama is unreachable, fail safe to filings rather than crashing the whole query
         return "filings"
 
 
