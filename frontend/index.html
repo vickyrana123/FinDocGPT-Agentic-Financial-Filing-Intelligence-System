@@ -385,6 +385,7 @@
   .route-tag.filings{color:var(--gold); background:var(--gold-dim);}
   .route-tag.both{color:var(--text); background:var(--surface-4);}
   .route-tag.error{color:var(--loss); background:var(--loss-dim);}
+  .route-tag.general{color:var(--text-dim); background:var(--surface-3);}
   .timestamp{font-family:var(--mono); font-size:11px; color:var(--text-dimmer);}
 
   .a-bubble-wrap{ position:relative; max-width:min(78ch, 94%); width:100%; }
@@ -760,7 +761,8 @@
     live:   '<path d="M13 2L3 14h8l-1 8 10-12h-8l1-8z"/>',
     filings:'<path d="M6 2h9l5 5v15H6z"/><path d="M9 12h6M9 16h6"/>',
     both:   '<path d="M4 4v16h16"/><path d="M8 15l3-3 3 3 5-6"/>',
-    error:  '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>'
+    error:  '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/>',
+    general: '<path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>'
   };
 
   // ---------- History (sidebar) ----------
@@ -901,7 +903,6 @@
 
     const bubble = document.createElement('div');
     bubble.className = 'a-bubble' + (isError ? ' error-answer' : (route === 'live' ? ' live-answer' : ''));
-
     const copyBtn = document.createElement('button');
     copyBtn.className = 'copy-btn';
     copyBtn.setAttribute('aria-label','Copy answer');

@@ -52,6 +52,58 @@ COMPANY_TO_TICKER = {
     "netflix": "NFLX",
 }
 
+import random
+
+GENERAL_PATTERNS = [
+    r'^\s*(hi|hello|hey|yo|good morning|good afternoon|good evening)\b',
+    r'\b(thanks|thank you|thx|appreciate it|great answer|good job|well done|awesome|perfect|got it|makes sense)\b',
+    r'^\s*(bye|goodbye|see you|later)\b',
+    r'\b(what can you do|who are you|what is this|help me understand what you do)\b',
+]
+
+GREETING_RESPONSES = [
+    "Hi there! I'm FinDocGPT — I can answer questions about SEC filings (10-Ks, 10-Qs) for Apple, Microsoft, Tesla, Amazon, and NVIDIA, plus check live stock prices. What would you like to know?",
+    "Hello! Ask me about a company's filings, current stock price, or both — happy to help.",
+]
+
+THANKS_RESPONSES = [
+    "You're welcome! Let me know if you have any other questions.",
+    "Glad that helped! Feel free to ask anything else about these filings or live prices.",
+    "Anytime! I'm here if you want to dig into anything else.",
+]
+
+CAPABILITY_RESPONSES = [
+    "I can answer questions from SEC 10-K/10-Q filings (Apple, Microsoft, Tesla, Amazon, NVIDIA), look up live stock prices, or combine both in one answer — just ask naturally!",
+]
+
+FAREWELL_RESPONSES = [
+    "Goodbye! Come back anytime you have questions about these filings or stock prices.",
+]
+
+
+def is_general_query(query: str) -> bool:
+    """
+    Detects greetings, thanks, farewells, and capability questions.
+    Guarded against false positives: if the message also contains live or
+    filing keywords (e.g. "thanks, what's Apple's price?"), it's NOT
+    treated as general - the real question still gets routed normally.
+    """
+    q = query.lower().strip()
+    if any(kw in q for kw in LIVE_KEYWORDS) or any(kw in q for kw in FILING_KEYWORDS):
+        return False
+    return any(re.search(p, q) for p in GENERAL_PATTERNS)
+
+
+def general_response(query: str) -> str:
+    q = query.lower()
+    if re.search(r'\b(thanks|thank you|thx|appreciate|great answer|good job|well done|awesome|perfect|got it|makes sense)\b', q):
+        return random.choice(THANKS_RESPONSES)
+    if re.search(r'^\s*(bye|goodbye|see you|later)\b', q):
+        return random.choice(FAREWELL_RESPONSES)
+    if re.search(r'\b(what can you do|who are you|what is this)\b', q):
+        return random.choice(CAPABILITY_RESPONSES)
+    return random.choice(GREETING_RESPONSES)
+
 
 def rule_based_route(query: str) -> str | None:
     q = query.lower()
@@ -89,6 +141,8 @@ Respond with ONLY one word: live, filings, or both."""
 
 
 def route_query(query: str) -> str:
+    if is_general_query(query):
+        return "general"
     rule_result = rule_based_route(query)
     return rule_result if rule_result else llm_route(query)
 

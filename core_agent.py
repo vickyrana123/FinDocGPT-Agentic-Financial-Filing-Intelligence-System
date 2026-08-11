@@ -8,9 +8,8 @@ from keywords).
 """
 
 from tools.stock_price import get_stock_price, format_price_result
-from router.query_router import route_query, extract_ticker
+from router.query_router import route_query, extract_ticker, general_response
 from retrieval.rag_chain import ask as query_filings
-
 
 def answer_query(query: str) -> dict:
     """
@@ -18,6 +17,14 @@ def answer_query(query: str) -> dict:
     {"answer": str, "route": str, "ticker": str | None}
     """
     route = route_query(query)
+
+    if route == "general":
+        return {
+            "answer": general_response(query),
+            "route": route,
+            "ticker": None,
+        }
+
     ticker = extract_ticker(query)
 
     if route == "live":
@@ -54,8 +61,7 @@ def answer_query(query: str) -> dict:
         "route": "unknown",
         "ticker": None,
     }
-
-
+    
 if __name__ == "__main__":
     test_queries = [
         "What is Apple's current stock price?",
