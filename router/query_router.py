@@ -96,7 +96,7 @@ def is_general_query(query: str) -> bool:
 
 def general_response(query: str) -> str:
     q = query.lower()
-    if re.search(r'\b(thanks|thank you|thx|appreciate|great answer|good job|well done|awesome|perfect|got it|makes sense)\b', q):
+    if re.search(r'\b(thanks|thank you|thx|appreciate it|great answer|good job|well done|awesome|perfect|got it|makes sense|great|nice|cool|good)\b', q):
         return random.choice(THANKS_RESPONSES)
     if re.search(r'^\s*(bye|goodbye|see you|later)\b', q):
         return random.choice(FAREWELL_RESPONSES)
