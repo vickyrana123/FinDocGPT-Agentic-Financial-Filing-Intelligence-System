@@ -5,20 +5,21 @@ Decides whether a question should be answered via:
   - live data tools (e.g. current stock price)
   - static RAG over SEC filings
   - both
+  - general conversation (greetings, thanks, capability questions)
 
-Two-stage decision:
+Two-stage decision for live/filings/both:
   1. Rule-based keyword hints (fast, free, deterministic)
   2. LLM classification fallback for ambiguous queries
+
+General conversation detection happens first and short-circuits everything
+else - see is_general_query().
 """
 
 import re
-import requests
-
-OLLAMA_URL = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "llama3.2"
-
+import random
 import sys
 from pathlib import Path
+
 sys.path.append(str(Path(__file__).parent.parent))
 from llm_client import call_llm
 
@@ -30,7 +31,8 @@ LIVE_KEYWORDS = [
 FILING_KEYWORDS = [
     "10-k", "10-q", "8-k", "filed", "filing", "reported", "annual report",
     "quarterly report", "risk factors", "management discussion", "md&a",
-    "net income", "balance sheet", "cash flow statement", "revenue in"
+    "net income", "balance sheet", "cash flow statement", "revenue in",
+    "grew", "growth", "grow",
 ]
 
 TICKER_PATTERN = re.compile(r'\b[A-Z]{1,5}\b')
@@ -52,11 +54,18 @@ COMPANY_TO_TICKER = {
     "netflix": "NFLX",
 }
 
-import random
+# Single source of truth for praise/thanks detection - previously this was
+# defined separately in GENERAL_PATTERNS (used for ROUTING) and again
+# inline inside general_response() (used only for reply selection). They
+# drifted apart when one got updated and the other didn't, causing
+# "great response from your side" to fail routing as general even though
+# the reply-selection regex would have handled it correctly. Now both
+# reference this one constant.
+PRAISE_WORDS = r'thanks|thank you|thx|appreciate it|great answer|good job|well done|awesome|perfect|got it|makes sense|great|nice|cool|good'
 
 GENERAL_PATTERNS = [
     r'^\s*(hi|hello|hey|yo|good morning|good afternoon|good evening)\b',
-    r'\b(thanks|thank you|thx|appreciate it|great answer|good job|well done|awesome|perfect|got it|makes sense)\b',
+    rf'\b({PRAISE_WORDS})\b',
     r'^\s*(bye|goodbye|see you|later)\b',
     r'\b(what can you do|who are you|what is this|help me understand what you do)\b',
 ]
@@ -96,7 +105,7 @@ def is_general_query(query: str) -> bool:
 
 def general_response(query: str) -> str:
     q = query.lower()
-    if re.search(r'\b(thanks|thank you|thx|appreciate it|great answer|good job|well done|awesome|perfect|got it|makes sense|great|nice|cool|good)\b', q):
+    if re.search(rf'\b({PRAISE_WORDS})\b', q):
         return random.choice(THANKS_RESPONSES)
     if re.search(r'^\s*(bye|goodbye|see you|later)\b', q):
         return random.choice(FAREWELL_RESPONSES)
@@ -147,22 +156,28 @@ def route_query(query: str) -> str:
     return rule_result if rule_result else llm_route(query)
 
 
+def _extract_ticker_from_text(text: str) -> str | None:
+    """Core extraction logic - separated out so history lookup (added
+    separately) can reuse it without recursion."""
+    candidates = [c for c in TICKER_PATTERN.findall(text) if c in KNOWN_TICKERS]
+    if candidates:
+        return candidates[0]
+
+    text_lower = text.lower()
+    for name, ticker in COMPANY_TO_TICKER.items():
+        if re.search(rf"\b{re.escape(name)}\b", text_lower):
+            return ticker
+
+    return None
+
+
 def extract_ticker(query: str) -> str | None:
     """Extract a ticker symbol from the query.
     First tries direct ticker matches (only against KNOWN_TICKERS, to avoid
     false positives on unrelated all-caps acronyms like SEC, CEO, USD).
     Falls back to matching known company names using word boundaries (so
     'meta' doesn't accidentally match inside 'metadata')."""
-    candidates = [c for c in TICKER_PATTERN.findall(query) if c in KNOWN_TICKERS]
-    if candidates:
-        return candidates[0]
-
-    q_lower = query.lower()
-    for name, ticker in COMPANY_TO_TICKER.items():
-        if re.search(rf"\b{re.escape(name)}\b", q_lower):
-            return ticker
-
-    return None
+    return _extract_ticker_from_text(query)
 
 
 if __name__ == "__main__":
@@ -170,7 +185,10 @@ if __name__ == "__main__":
         "What is Apple's current stock price?",
         "What were Apple's risk factors in their latest 10-K?",
         "How does TSLA's current price compare to their reported revenue growth?",
-        "What does the SEC require in a 10-K filing?",  # should NOT extract "SEC" as ticker now
+        "What does the SEC require in a 10-K filing?",
+        "great response from your side",   # should now be "general"
+        "netflix is grew in 2024?",         # should now be "filings"
+        "great",                             # should be "general"
     ]
     for q in test_queries:
         print(f"\nQ: {q}")
