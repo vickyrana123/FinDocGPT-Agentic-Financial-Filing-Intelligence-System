@@ -24,7 +24,6 @@ METRIC_KEYWORDS = [
     "cash flow",
 ]
 
-
 def is_metric_query(question: str) -> bool:
     q = question.lower()
     return any(kw in q for kw in METRIC_KEYWORDS)
@@ -58,7 +57,6 @@ Sources:
 [AAPL, 10-K, 2025-10-31, Risk Factors]
 """
 
-
 def build_context(chunks: list[str], metadatas: list[dict]) -> str:
     parts = []
     for i, (chunk, meta) in enumerate(zip(chunks, metadatas)):
@@ -66,12 +64,10 @@ def build_context(chunks: list[str], metadatas: list[dict]) -> str:
         parts.append(f"--- Source {i+1} {source_tag} ---\n{chunk}")
     return "\n\n".join(parts)
 
-
 def call_ollama(prompt: str) -> str:
     """Delegates to the centralized llm_client, which switches between
     Ollama (local dev) and Groq (deployed) based on LLM_PROVIDER."""
     return call_llm(prompt, temperature=0.2, max_tokens=800, timeout=400)
-
 
 def ask_with_context(question: str, n_results: int = 5, ticker: str = None, section: str = None) -> dict:
     """
@@ -80,21 +76,47 @@ def ask_with_context(question: str, n_results: int = 5, ticker: str = None, sect
     answer against the actual context it was generated from, not just
     the final text).
     """
-    
+
     if section is None and ticker and is_metric_query(question):
         section = ["Financial Statements", "MD&A"]
         n_results = max(n_results, 6)
-        
+
     results = search(question, n_results=n_results, ticker=ticker, section=section)
 
     docs = results["documents"][0]
     metas = results["metadatas"][0]
+    distances = results["distances"][0]
 
     if not docs:
         return {
             "answer": "No relevant filing content was found for this question.",
             "contexts": [],
         }
+
+    # Relevance gate: ChromaDB always returns its top-k nearest chunks,
+    # even if none are actually relevant to the question - it has no
+    # concept of "not relevant enough," only "closest available." Without
+    # this check, a genuinely off-topic or nonsensical query still gets
+    # handed real (but irrelevant) chunks, and the LLM will often just
+    # summarize whatever it received instead of recognizing the mismatch.
+    # Lower distance = more similar. Threshold calibrated empirically:
+    # genuinely relevant queries scored 0.63-0.78 distance, genuinely
+    # irrelevant/off-topic queries scored 1.53-1.59 - a wide, clean gap,
+    # so 1.0 sits safely in the middle with margin on both sides.
+    RELEVANCE_THRESHOLD = 1.0
+    relevant_pairs = [
+        (doc, meta) for doc, meta, dist in zip(docs, metas, distances)
+        if dist < RELEVANCE_THRESHOLD
+    ]
+
+    if not relevant_pairs:
+        return {
+            "answer": "This information is not available in the provided filing excerpts.",
+            "contexts": [],
+        }
+
+    docs = [d for d, m in relevant_pairs]
+    metas = [m for d, m in relevant_pairs]
 
     context = build_context(docs, metas)
 
