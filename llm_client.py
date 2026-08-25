@@ -26,7 +26,11 @@ OLLAMA_MODEL = "llama3.2"
 # --- Groq (deployed) config ---
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = "llama-3.1-8b-instant"  # fast, free-tier friendly Groq model
+GROQ_MODEL = "groq/compound-mini"  # llama-3.1-8b-instant requires phone
+                                     # verification not yet completed on this
+                                     # account; compound-mini is accessible
+                                     # without it and stays free
+
 
 def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int = 800, timeout: int = 60) -> str:
     """
@@ -38,7 +42,7 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int = 800, timeo
         if not GROQ_API_KEY:
             raise EnvironmentError("GROQ_API_KEY not set - required when LLM_PROVIDER=groq.")
 
-            response = requests.post(
+        response = requests.post(
             GROQ_URL,
             headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
             json={
@@ -50,9 +54,6 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int = 800, timeo
             timeout=timeout,
         )
         if not response.ok:
-            # Surface Groq's actual error body instead of a bare status
-            # code - this is what tells us WHY (e.g. deprecated model
-            # name) instead of just THAT something failed.
             raise RuntimeError(f"Groq API error {response.status_code}: {response.text}")
         return response.json()["choices"][0]["message"]["content"]
 
