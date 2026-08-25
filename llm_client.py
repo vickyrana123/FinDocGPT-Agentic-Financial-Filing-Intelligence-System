@@ -28,7 +28,6 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = "llama-3.1-8b-instant"  # fast, free-tier friendly Groq model
 
-
 def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int = 800, timeout: int = 60) -> str:
     """
     Sends a prompt to whichever provider is configured and returns the
@@ -39,7 +38,7 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int = 800, timeo
         if not GROQ_API_KEY:
             raise EnvironmentError("GROQ_API_KEY not set - required when LLM_PROVIDER=groq.")
 
-        response = requests.post(
+            response = requests.post(
             GROQ_URL,
             headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
             json={
@@ -50,7 +49,11 @@ def call_llm(prompt: str, temperature: float = 0.2, max_tokens: int = 800, timeo
             },
             timeout=timeout,
         )
-        response.raise_for_status()
+        if not response.ok:
+            # Surface Groq's actual error body instead of a bare status
+            # code - this is what tells us WHY (e.g. deprecated model
+            # name) instead of just THAT something failed.
+            raise RuntimeError(f"Groq API error {response.status_code}: {response.text}")
         return response.json()["choices"][0]["message"]["content"]
 
     else:  # ollama (local dev default)
