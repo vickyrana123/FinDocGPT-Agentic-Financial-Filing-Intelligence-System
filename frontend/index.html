@@ -689,6 +689,7 @@
   const marketText = document.getElementById('marketText');
 
   let historyCount = 0;
+  let conversationHistory = [];  // {question, answer} pairs, sent to the backend for multi-turn context
 
   // ---------- Market status (illustrative — NYSE hours, US/Eastern-ish approximation) ----------
   function updateMarketStatus(){
@@ -959,11 +960,18 @@
       const res = await fetch(`${API_BASE}/ask`, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ question })
+        body: JSON.stringify({ question, history: conversationHistory })
       });
       const data = await res.json();
       if (!res.ok){ throw new Error(data.detail || `Request failed (${res.status})`); }
       renderAnswer(aRow, thinking, question, data.answer, false, data.route);
+
+      // Record this turn for future follow-up questions. Capped to the
+      // last 10 turns client-side so the payload doesn't grow unbounded
+      // over a long session (the backend itself only uses the last 3
+      // anyway - this cap is just to keep the request body reasonable).
+      conversationHistory.push({ question, answer: data.answer });
+      if (conversationHistory.length > 10) conversationHistory.shift();
     }catch(err){
       renderAnswer(aRow, thinking, question, `Could not reach FinDocGPT: ${err.message}`, true);
       toast('Request failed — check API connection', 'error');
@@ -991,6 +999,7 @@
     feed.appendChild(emptyState);
     emptyState.style.display = 'block';
     topbarTitle.textContent = 'New Session';
+    conversationHistory = [];   // <-- add this
     closeSidebar();
     input.focus();
     toast('Started a new session');

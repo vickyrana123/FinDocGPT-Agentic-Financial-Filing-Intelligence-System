@@ -171,13 +171,24 @@ def _extract_ticker_from_text(text: str) -> str | None:
     return None
 
 
-def extract_ticker(query: str) -> str | None:
-    """Extract a ticker symbol from the query.
-    First tries direct ticker matches (only against KNOWN_TICKERS, to avoid
-    false positives on unrelated all-caps acronyms like SEC, CEO, USD).
-    Falls back to matching known company names using word boundaries (so
-    'meta' doesn't accidentally match inside 'metadata')."""
-    return _extract_ticker_from_text(query)
+def extract_ticker(query: str, history: list[dict] | None = None) -> str | None:
+    """
+    Extract a ticker from the current query. If none is found and
+    conversation history is available, falls back to the most recently
+    mentioned ticker - lets "what about their revenue?" work as a
+    follow-up instead of failing with no ticker found.
+    """
+    ticker = _extract_ticker_from_text(query)
+    if ticker:
+        return ticker
+
+    if history:
+        for turn in reversed(history):
+            prior_ticker = _extract_ticker_from_text(turn.get("question", ""))
+            if prior_ticker:
+                return prior_ticker
+
+    return None
 
 
 if __name__ == "__main__":

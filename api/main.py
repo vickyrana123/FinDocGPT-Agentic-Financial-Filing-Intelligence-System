@@ -60,6 +60,7 @@ app.add_middleware(
 
 class QueryRequest(BaseModel):
     question: str
+    history: list[dict] | None = None
 
 
 class QueryResponse(BaseModel):
@@ -81,10 +82,10 @@ def ask_question(request: QueryRequest):
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
 
     try:
-        result = answer_query(question)
+        result = answer_query(question, history=request.history)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing query: {e}")
-
+    
     return QueryResponse(
         question=question,
         answer=result["answer"],

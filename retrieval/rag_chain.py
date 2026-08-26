@@ -69,40 +69,52 @@ def call_ollama(prompt: str) -> str:
     Ollama (local dev) and Groq (deployed) based on LLM_PROVIDER."""
     return call_llm(prompt, temperature=0.2, max_tokens=800, timeout=400)
 
-def ask_with_context(question: str, n_results: int = 5, ticker: str = None, section: str = None) -> dict:
-    """
-    Same RAG pipeline as ask(), but also returns the raw retrieved chunks
-    - needed for evaluation (faithfulness scoring requires comparing the
-    answer against the actual context it was generated from, not just
-    the final text).
-    """
+def ask_with_context(question: str, n_results: int = 5, ticker: str = None, section: str = None, history: list[dict] | None = None) -> dict:
+    # Check both the current question AND the previous turn for
+    # metric-seeking language - a follow-up like "did it increase?" won't
+    # contain "revenue" itself, but the prior question/answer establishes
+    # that context. Without this, metric-scoped section filtering only
+    # ever activated on the first question of a topic, not follow-ups.
+    is_metric_context = is_metric_query(question)
+    if not is_metric_context and history:
+        last_turn = history[-1]
+        is_metric_context = (
+            is_metric_query(last_turn.get("question", "")) or
+            is_metric_query(last_turn.get("answer", ""))
+        )
 
-    if section is None and ticker and is_metric_query(question):
+    if section is None and ticker and is_metric_context:
         section = ["Financial Statements", "MD&A"]
         n_results = max(n_results, 6)
 
-    results = search(question, n_results=n_results, ticker=ticker, section=section)
+    # For retrieval specifically (not the final prompt), enrich a vague
+    # follow-up question with the previous turn's question - a standalone
+    # follow-up like "so it is gradually increased?" has almost no
+    # semantic content on its own, so retrieval alone (before the LLM
+    # ever sees history) would return weak matches and get rejected by
+    # the relevance gate below, even though the follow-up is perfectly
+    # answerable once you know what "it" refers to.
+        retrieval_query = question
+    if history:
+        last_turn = history[-1]
+        last_question = last_turn.get("question", "")
+        last_answer = last_turn.get("answer", "")[:200]
+        if last_question or last_answer:
+            # Lead with the prior answer's specific terminology (embedding
+            # similarity weights earlier tokens more heavily in practice),
+            # then the current question - biases retrieval toward the
+            # exact metric previously discussed, not just the general topic.
+            retrieval_query = f"{last_answer} {last_question} {question}"
+            
+    results = search(retrieval_query, n_results=n_results, ticker=ticker, section=section)
 
     docs = results["documents"][0]
     metas = results["metadatas"][0]
     distances = results["distances"][0]
 
     if not docs:
-        return {
-            "answer": "No relevant filing content was found for this question.",
-            "contexts": [],
-        }
+        return {"answer": "No relevant filing content was found for this question.", "contexts": []}
 
-    # Relevance gate: ChromaDB always returns its top-k nearest chunks,
-    # even if none are actually relevant to the question - it has no
-    # concept of "not relevant enough," only "closest available." Without
-    # this check, a genuinely off-topic or nonsensical query still gets
-    # handed real (but irrelevant) chunks, and the LLM will often just
-    # summarize whatever it received instead of recognizing the mismatch.
-    # Lower distance = more similar. Threshold calibrated empirically:
-    # genuinely relevant queries scored 0.63-0.78 distance, genuinely
-    # irrelevant/off-topic queries scored 1.53-1.59 - a wide, clean gap,
-    # so 1.0 sits safely in the middle with margin on both sides.
     RELEVANCE_THRESHOLD = 1.0
     relevant_pairs = [
         (doc, meta) for doc, meta, dist in zip(docs, metas, distances)
@@ -110,19 +122,22 @@ def ask_with_context(question: str, n_results: int = 5, ticker: str = None, sect
     ]
 
     if not relevant_pairs:
-        return {
-            "answer": "This information is not available in the provided filing excerpts.",
-            "contexts": [],
-        }
+        return {"answer": "This information is not available in the provided filing excerpts.", "contexts": []}
 
     docs = [d for d, m in relevant_pairs]
     metas = [m for d, m in relevant_pairs]
 
     context = build_context(docs, metas)
 
+    history_block = ""
+    if history:
+        recent = history[-3:]
+        lines = [f"User: {t.get('question','')}\nAssistant: {t.get('answer','')[:300]}" for t in recent]
+        history_block = "CONVERSATION SO FAR:\n" + "\n\n".join(lines) + "\n\n"
+
     full_prompt = f"""{SYSTEM_PROMPT}
 
-CONTEXT:
+{history_block}CONTEXT:
 {context}
 
 QUESTION: {question}
@@ -132,13 +147,9 @@ ANSWER:"""
     answer = call_ollama(full_prompt)
     return {"answer": answer, "contexts": docs}
 
-def ask(question: str, n_results: int = 5, ticker: str = None, section: str = None) -> str:
-    """
-    Full RAG pipeline: retrieve relevant chunks, build a grounded prompt,
-    generate an answer via Ollama. Thin wrapper around ask_with_context()
-    for callers that only need the answer text.
-    """
-    return ask_with_context(question, n_results, ticker, section)["answer"]
+
+def ask(question: str, n_results: int = 5, ticker: str = None, section: str = None, history: list[dict] | None = None) -> str:
+    return ask_with_context(question, n_results, ticker, section, history)["answer"]
 
 if __name__ == "__main__":
     print("FinDocGPT - RAG test (type 'quit' to exit)\n")
